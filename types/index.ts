@@ -36,6 +36,15 @@ export interface MeResponse {
   flat?: Flat;
 }
 
+export interface UserListItem {
+  id: string;
+  email: string;
+  phone: string;
+  role: Role;
+  createdAt: string;
+  flat?: { id: string; unitNumber: string } | null;
+}
+
 // ─── Categories ──────────────────────────────────────────────────────────────
 
 export interface Category {

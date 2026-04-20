@@ -224,6 +224,10 @@ export const adminApi = {
 
   updateFlat: (id: string, data: Partial<import('@/types').Flat>) =>
     api.patch<import('@/types').Flat>(`/admin/flats/${id}`, data),
+
+  // Users
+  getUsers: (params?: { role?: string; unassigned?: boolean }) =>
+    api.get<import('@/types').UserListItem[]>('/admin/users', { params }),
 };
 
 // ─── Expense Endpoints ────────────────────────────────────────────────────────
