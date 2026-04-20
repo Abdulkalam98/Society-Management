@@ -6,12 +6,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
-import type { Flat } from '@/types';
+import type { Flat, UserListItem } from '@/types';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Table, type Column } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Input, Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/contexts/ToastContext';
 import { ApiError } from '@/lib/api';
@@ -33,6 +33,7 @@ export default function FlatsPage() {
   const router = useRouter();
   const { success, error: toastError } = useToast();
   const [flats, setFlats] = useState<Flat[]>([]);
+  const [homeowners, setHomeowners] = useState<UserListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -58,9 +59,15 @@ export default function FlatsPage() {
     formState: { errors, isSubmitting },
   } = useForm<CreateValues>({ resolver: zodResolver(createSchema) });
 
-  const openCreate = () => {
+  const openCreate = async () => {
     reset({ unitNumber: '', floor: '', block: '', area: '', occupantName: '', ownerId: '' });
     setModalOpen(true);
+    try {
+      const users = await adminApi.getUsers({ role: 'HOMEOWNER', unassigned: true });
+      setHomeowners(users);
+    } catch {
+      // non-fatal — admin can still type UUID manually
+    }
   };
 
   const onSubmit = async (values: CreateValues) => {
@@ -231,13 +238,18 @@ export default function FlatsPage() {
             error={errors.occupantName?.message}
             required
           />
-          <Input
+          <Select
             {...register('ownerId')}
-            label="Owner User ID"
-            placeholder="UUID of the owner account"
+            label="Owner (Homeowner)"
             error={errors.ownerId?.message}
-            hint="Must be the UUID of a registered HOMEOWNER account"
             required
+            options={[
+              { value: '', label: homeowners.length === 0 ? 'No unassigned homeowners' : 'Select a homeowner...' },
+              ...homeowners.map((u) => ({
+                value: u.id,
+                label: `${u.email} (${u.phone})`,
+              })),
+            ]}
           />
         </form>
       </Modal>
