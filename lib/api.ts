@@ -113,6 +113,7 @@ async function request<T>(
   if (!response.ok) {
     const errorData = data as Record<string, unknown>;
     const message =
+      (errorData?.error as string) ||
       (errorData?.message as string) ||
       (typeof data === 'string' ? data : 'An error occurred');
     const code = errorData?.code as string | undefined;
@@ -147,12 +148,14 @@ export const authApi = {
   register: (data: { email: string; phone: string; password: string; role: string }) =>
     api.post('/auth/register', data, { skipAuth: true }),
 
-  login: (data: { email: string; password: string }) =>
-    api.post<{ accessToken: string; refreshToken: string; user: import('@/types').User }>(
+  login: async (data: { email: string; password: string }) => {
+    const res = await api.post<{ success: boolean; data: { accessToken: string; refreshToken: string; user: import('@/types').User } }>(
       '/auth/login',
       data,
       { skipAuth: true }
-    ),
+    );
+    return res.data;
+  },
 
   logout: (refreshToken: string) =>
     api.post('/auth/logout', { refreshToken }),
@@ -163,7 +166,11 @@ export const authApi = {
   completePasswordReset: (data: { email: string; otp: string; newPassword: string }) =>
     api.post('/auth/password-reset/complete', data, { skipAuth: true }),
 
-  me: () => api.get<import('@/types').MeResponse>('/auth/me'),
+  me: async () => {
+    const res = await api.get<{ success: boolean; data: import('@/types').User & { flat?: import('@/types').Flat } }>('/auth/me');
+    const userData = res.data;
+    return { user: userData, flat: userData.flat };
+  },
 };
 
 // ─── Admin Endpoints ──────────────────────────────────────────────────────────
