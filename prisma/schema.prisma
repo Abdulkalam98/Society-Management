@@ -1,0 +1,249 @@
+// Prisma Schema — Society Management System
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  HOMEOWNER
+}
+
+enum BillStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+enum PaymentStatus {
+  CREATED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum NotificationType {
+  BILL_GENERATED
+  PAYMENT_RECEIVED
+  PAYMENT_FAILED
+  ANNOUNCEMENT
+  REMINDER
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum ReconciliationStatus {
+  MATCHED
+  MISMATCH
+  DUPLICATE
+  PENDING
+}
+
+// ─── Core Models ──────────────────────────────────────────────────────────────
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  phone           String    @unique
+  passwordHash    String
+  role            Role      @default(HOMEOWNER)
+  isActive        Boolean   @default(true)
+  failedLogins    Int       @default(0)
+  lockedUntil     DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  flat            Flat?
+  otpTokens       OtpToken[]
+  refreshTokens   RefreshToken[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+
+  @@index([email])
+  @@index([phone])
+}
+
+model Flat {
+  id              String    @id @default(uuid())
+  unitNumber      String    @unique  // e.g. "A-101", "B-204"
+  floor           Int
+  block           String
+  area            Float     // in sq ft
+  occupantName    String
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  ownerId         String    @unique
+  owner           User      @relation(fields: [ownerId], references: [id])
+  flatBills       FlatBill[]
+
+  @@index([unitNumber])
+  @@index([block])
+}
+
+model ExpenseCategory {
+  id              String    @id @default(uuid())
+  name            String    @unique  // e.g. "Electricity", "Security", "Maintenance"
+  description     String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  expenses        Expense[]
+}
+
+model Expense {
+  id              String    @id @default(uuid())
+  title           String
+  description     String?
+  amount          Float
+  month           Int       // 1-12
+  year            Int
+  categoryId      String
+  postedByAdminId String
+  isSplit         Boolean   @default(false)
+  splitAt         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  category        ExpenseCategory @relation(fields: [categoryId], references: [id])
+  flatBills       FlatBill[]
+
+  @@index([month, year])
+  @@index([categoryId])
+}
+
+model FlatBill {
+  id              String      @id @default(uuid())
+  flatId          String
+  expenseId       String
+  amountDue       Float
+  amountPaid      Float       @default(0)
+  status          BillStatus  @default(PENDING)
+  dueDate         DateTime
+  paidAt          DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  flat            Flat        @relation(fields: [flatId], references: [id])
+  expense         Expense     @relation(fields: [expenseId], references: [id])
+  payments        Payment[]
+
+  @@unique([flatId, expenseId])
+  @@index([flatId])
+  @@index([status])
+}
+
+model Payment {
+  id                  String        @id @default(uuid())
+  flatBillId          String
+  razorpayOrderId     String        @unique
+  razorpayPaymentId   String?       @unique
+  razorpaySignature   String?
+  amount              Float
+  currency            String        @default("INR")
+  status              PaymentStatus @default(CREATED)
+  failureReason       String?
+  receiptUrl          String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  flatBill            FlatBill      @relation(fields: [flatBillId], references: [id])
+  reconciliation      ReconciliationEntry?
+
+  @@index([flatBillId])
+  @@index([razorpayOrderId])
+}
+
+model Notification {
+  id          String              @id @default(uuid())
+  userId      String
+  type        NotificationType
+  channel     NotificationChannel
+  subject     String
+  body        String
+  isRead      Boolean             @default(false)
+  sentAt      DateTime?
+  failedAt    DateTime?
+  errorMsg    String?
+  createdAt   DateTime            @default(now())
+
+  user        User                @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([type])
+}
+
+model OtpToken {
+  id          String    @id @default(uuid())
+  userId      String
+  token       String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  token       String    @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model ReconciliationEntry {
+  id              String                @id @default(uuid())
+  paymentId       String                @unique
+  gatewayRef      String
+  recordedAmount  Float
+  gatewayAmount   Float
+  status          ReconciliationStatus  @default(PENDING)
+  notes           String?
+  resolvedAt      DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  payment         Payment               @relation(fields: [paymentId], references: [id])
+
+  @@index([status])
+}
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  userId      String
+  action      String
+  entity      String
+  entityId    String
+  meta        Json?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity, entityId])
+}
