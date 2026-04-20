@@ -4,7 +4,6 @@ dist/
 .env.local
 *.log
 coverage/
-prisma/migrations/
 .next/
 .DS_Store
 frontend/
