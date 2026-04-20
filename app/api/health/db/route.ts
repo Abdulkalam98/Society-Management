@@ -4,7 +4,7 @@ import { prisma } from '@/lib/server/prisma';
 export async function GET() {
   try {
     // Test raw DB connectivity
-    const result = await prisma.$queryRaw`SELECT 1 as connected`;
+    await prisma.$queryRaw`SELECT 1 as connected`;
 
     // Check if tables exist
     const tables = await prisma.$queryRaw<{ tablename: string }[]>`
@@ -13,10 +13,15 @@ export async function GET() {
 
     const tableNames = tables.map((t) => t.tablename);
 
-    // Check user count if User table exists
+    // List all users (without sensitive data)
     let userCount = 0;
+    let users: { id: string; email: string; role: string; phone: string; createdAt: Date }[] = [];
     if (tableNames.includes('User')) {
       userCount = await prisma.user.count();
+      users = await prisma.user.findMany({
+        select: { id: true, email: true, role: true, phone: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      });
     }
 
     return NextResponse.json({
@@ -25,6 +30,7 @@ export async function GET() {
       tables: tableNames,
       tablesCount: tableNames.length,
       userCount,
+      users,
       env: {
         hasDbUrl: !!process.env.DATABASE_URL,
         hasDirectUrl: !!process.env.DIRECT_URL,
