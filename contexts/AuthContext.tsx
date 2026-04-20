@@ -67,10 +67,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const { user: me, flat: myFlat } = await authApi.me();
-      setUser(me);
-      setFlat(myFlat);
-      setSessionCookies(me.role);
+      const meData = await authApi.me();
+      // me endpoint returns user fields + flat directly (not nested under .user)
+      const { flat: myFlat, ...userData } = meData as any;
+      setUser(userData);
+      setFlat(myFlat ?? undefined);
+      setSessionCookies(userData.role);
     } catch {
       clearTokens();
       clearSessionCookies();
@@ -95,8 +97,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Fetch flat info if homeowner
     if (data.user.role === 'HOMEOWNER') {
       try {
-        const { flat: myFlat } = await authApi.me();
-        setFlat(myFlat);
+        const meData = await authApi.me() as any;
+        setFlat(meData.flat ?? undefined);
       } catch {
         // non-fatal
       }

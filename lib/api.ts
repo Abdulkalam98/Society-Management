@@ -120,6 +120,16 @@ async function request<T>(
     throw new ApiError(message, response.status, code);
   }
 
+  // Auto-unwrap { success: true, data: ... } envelope used by all API routes
+  if (
+    data &&
+    typeof data === 'object' &&
+    'success' in (data as Record<string, unknown>) &&
+    'data' in (data as Record<string, unknown>)
+  ) {
+    return (data as Record<string, unknown>).data as T;
+  }
+
   return data as T;
 }
 
@@ -148,14 +158,12 @@ export const authApi = {
   register: (data: { email: string; phone: string; password: string; role: string }) =>
     api.post('/auth/register', data, { skipAuth: true }),
 
-  login: async (data: { email: string; password: string }) => {
-    const res = await api.post<{ success: boolean; data: { accessToken: string; refreshToken: string; user: import('@/types').User } }>(
+  login: (data: { email: string; password: string }) =>
+    api.post<{ accessToken: string; refreshToken: string; user: import('@/types').User }>(
       '/auth/login',
       data,
       { skipAuth: true }
-    );
-    return res.data;
-  },
+    ),
 
   logout: (refreshToken: string) =>
     api.post('/auth/logout', { refreshToken }),
@@ -166,11 +174,7 @@ export const authApi = {
   completePasswordReset: (data: { email: string; otp: string; newPassword: string }) =>
     api.post('/auth/password-reset/complete', data, { skipAuth: true }),
 
-  me: async () => {
-    const res = await api.get<{ success: boolean; data: import('@/types').User & { flat?: import('@/types').Flat } }>('/auth/me');
-    const userData = res.data;
-    return { user: userData, flat: userData.flat };
-  },
+  me: () => api.get<import('@/types').MeResponse>('/auth/me'),
 };
 
 // ─── Admin Endpoints ──────────────────────────────────────────────────────────
