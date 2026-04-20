@@ -61,7 +61,11 @@ export async function splitExpense(expenseId: string): Promise<{
   return {
     billsCreated: createdBills.length,
     amountPerFlat,
-    bills: createdBills,
+    bills: createdBills.map((b) => ({
+      ...b,
+      amount: b.amountDue,
+      paidAmount: b.amountPaid,
+    })),
   };
 }
 
@@ -90,11 +94,17 @@ export async function getStatementForFlat(flatId: string, month?: number, year?:
     orderBy: { createdAt: 'desc' },
   });
 
+  const mappedBills = bills.map((b) => ({
+    ...b,
+    amount: b.amountDue,
+    paidAmount: b.amountPaid,
+  }));
+
   const totalDue = bills.reduce((sum, b) => sum + b.amountDue, 0);
   const totalPaid = bills.reduce((sum, b) => sum + b.amountPaid, 0);
   const outstanding = totalDue - totalPaid;
 
-  return { flat, bills, summary: { totalDue, totalPaid, outstanding, billCount: bills.length } };
+  return { flat, bills: mappedBills, summary: { totalDue, totalPaid, outstanding, billCount: bills.length } };
 }
 
 // ─── Dues ─────────────────────────────────────────────────────────────────────
@@ -102,33 +112,34 @@ export async function getStatementForFlat(flatId: string, month?: number, year?:
 export async function getOutstandingDues(flatId: string) {
   const bills = await prisma.flatBill.findMany({
     where: { flatId, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
-    include: { expense: { include: { category: true } } },
+    include: { expense: { include: { category: true } }, flat: true },
     orderBy: { dueDate: 'asc' },
   });
 
-  const total = bills.reduce((sum, b) => sum + (b.amountDue - b.amountPaid), 0);
-  return { flatId, bills, totalOutstanding: total };
+  // Return flat array with frontend-friendly field names
+  return bills.map((b) => ({
+    ...b,
+    amount: b.amountDue,
+    paidAmount: b.amountPaid,
+  }));
 }
 
 export async function getAllOutstandingDues() {
   const bills = await prisma.flatBill.findMany({
     where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
     include: {
-      flat: { select: { unitNumber: true, block: true, owner: { select: { email: true, phone: true } } } },
+      flat: { select: { id: true, unitNumber: true, block: true, owner: { select: { email: true, phone: true } } } },
       expense: { include: { category: true } },
     },
     orderBy: { dueDate: 'asc' },
   });
 
-  // Group by flat
-  const grouped: Record<string, typeof bills> = {};
-  for (const bill of bills) {
-    const key = bill.flat.unitNumber;
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(bill);
-  }
-
-  return grouped;
+  // Return flat array with frontend-friendly field names
+  return bills.map((b) => ({
+    ...b,
+    amount: b.amountDue,
+    paidAmount: b.amountPaid,
+  }));
 }
 
 // ─── Mark Overdue ─────────────────────────────────────────────────────────────

@@ -72,7 +72,11 @@ export async function getFlatOutstandingReport() {
     ownerEmail: flat.owner.email,
     totalOutstanding: flat.flatBills.reduce((s, b) => s + (b.amountDue - b.amountPaid), 0),
     billCount: flat.flatBills.length,
-    bills: flat.flatBills,
+    bills: flat.flatBills.map((b) => ({
+      ...b,
+      amount: b.amountDue,
+      paidAmount: b.amountPaid,
+    })),
   }));
 }
 

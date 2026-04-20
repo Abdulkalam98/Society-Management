@@ -74,6 +74,8 @@ export interface FlatBill {
   expense?: Expense;
   amount: number;
   paidAmount: number;
+  amountDue?: number;
+  amountPaid?: number;
   status: BillStatus;
   dueDate?: string;
   createdAt: string;
